@@ -64,6 +64,11 @@ let timestamps = [
 let test_totp () =
   List.iteri (fun i expected ->
     let t = List.nth timestamps i in
+    let secret = match (Base32.encode secret) with
+    | Ok s -> s
+    | Error _ -> failwith "Could not encode secret"
+    in
+
     let actual = Totp.gen_totp secret 30 8 (Int64.of_int t) in
 
     check string "TOTP's should match" expected actual
