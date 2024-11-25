@@ -1,54 +1,44 @@
 let sha1_block_size = 64
 
-let xor_string s1 s2 =
-  let pad_to_size s l =
-    match String.length s with
-    | x when x >= l -> s
-    | _ -> (
-      String.cat 
-        s
-        (String.make (l - String.length s) (char_of_int 0)) 
-      )
+let hmac_sha1 (key:string) (m:int64) : Sha1.t =
+  let counter_bytes =
+    Bytes.init 8 (fun i ->
+        Char.chr ((Int64.to_int (Int64.shift_right m (8 * (7 - i)))) land 0xFF))
   in
 
-  let xor_char c1 c2 =
-    char_of_int ((int_of_char c1) lxor (int_of_char c2))
-  in
-  let max_len = match (String.length s1), (String.length s2) with
-  | (l1, l2) when l1 >= l2 -> l1
-  | (_, l2) -> l2
-  in
-  let ps1 = pad_to_size s1 max_len in
-  let ps2 = pad_to_size s2 max_len in
+  let msg = Bytes.to_string counter_bytes in
 
-  String.mapi (fun i c -> xor_char c (String.get ps2 i)) ps1
-
-let hmac_sha1 (key:string) (msg:string) : string =
-  let opad = String.make sha1_block_size (char_of_int 0x5c) in
-  let ipad = String.make sha1_block_size (char_of_int 0x36) in
   let key_len = String.length key  in
   let k' = match key_len with
-  | _ when key_len > sha1_block_size -> Sha1.string key |> Sha1.to_bin
+  | _ when key_len > sha1_block_size -> 
+      Sha1.string key 
+      |> Sha1.to_bin
+  | _ when key_len < sha1_block_size ->
+      key ^ (String.make (sha1_block_size-key_len) '\000')
   | _ -> key 
   in
-  let k_ipad = xor_string k' ipad in
-  let k_ipad_msg = String.cat k_ipad msg in
-  let h1 = Sha1.string k_ipad_msg |> Sha1.to_bin in
-  let k_opad = xor_string k' opad in
-  let res = Sha1.string (String.cat k_opad h1) in
-  Printf.printf "Sha1: %s\n" (Sha1.to_hex res);
-  Sha1.to_bin res
+  
+  let ipad = Bytes.init sha1_block_size (fun i -> Char.chr ((Char.code k'.[i]) lxor 0x36)) in
+  let opad = Bytes.init sha1_block_size (fun i -> Char.chr ((Char.code k'.[i]) lxor 0x5c)) in
+
+  let inner_hash = Sha1.string (Bytes.to_string ipad ^ msg) in
+  let res = Sha1.string (Bytes.to_string opad ^ Sha1.to_bin inner_hash) in
+
+  Printf.printf "sha: %s\n" (Sha1.to_hex res);
+  res
 
 let mac_offset (s:string) : int = 
   let n = String.length s in
-  let c = String.get s (n-1) in
-  (int_of_char c) land 0xf
+  let c = int_of_char (String.get s (n-1)) in
+  c land 0xf
 
 let mac_bin_code (s:string) (offset:int) : int =
   let x1 = int_of_char (String.get s offset) in
   let x2 = int_of_char (String.get s (offset+1)) in
   let x3 = int_of_char (String.get s (offset+2)) in
   let x4 = int_of_char (String.get s (offset+3)) in
+
+  Printf.printf "bytes from offset: %2x%2x%2x%2x\n" x1 x2 x3 x4;
 
   ((x1 land 0x7f) lsl 24)
   lor ((x2 land 0xff) lsl 16)
@@ -60,9 +50,14 @@ let rec pow n e acc =
   | _ when e <= 0 -> acc
   | _ -> pow n (e-1) (n * acc)
 
-let gen_hotp (key:string) (counter:string) (digits:int): int =
-  let sha = hmac_sha1 key counter in
+let gen_hotp (key:string) (counter:int64) (digits:int): int =
+  Printf.printf "counter:%d\n" (Int64.to_int counter);
+  let sha = hmac_sha1 key counter
+    |> Sha1.to_bin
+  in
   let offset = mac_offset sha in
+  Printf.printf "offset: %d\n" offset;
   let bin_code = mac_bin_code sha offset in
+  let max = (pow 10 digits 1) in
 
-  bin_code mod (pow 10 digits 1)
+  bin_code mod max
