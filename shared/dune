@@ -1,0 +1,3 @@
+(library
+ (name shared)
+ (public_name cli_2fa.shared))
