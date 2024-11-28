@@ -24,7 +24,6 @@ let hmac_sha1 (key:string) (m:int64) : Sha1.t =
   let inner_hash = Sha1.string (Bytes.to_string ipad ^ msg) in
   let res = Sha1.string (Bytes.to_string opad ^ Sha1.to_bin inner_hash) in
 
-  Printf.printf "sha: %s\n" (Sha1.to_hex res);
   res
 
 let mac_offset (s:string) : int = 
@@ -38,7 +37,6 @@ let mac_bin_code (s:string) (offset:int) : int =
   let x3 = int_of_char (String.get s (offset+2)) in
   let x4 = int_of_char (String.get s (offset+3)) in
 
-  Printf.printf "bytes from offset: %2x%2x%2x%2x\n" x1 x2 x3 x4;
 
   ((x1 land 0x7f) lsl 24)
   lor ((x2 land 0xff) lsl 16)
@@ -51,12 +49,10 @@ let rec pow n e acc =
   | _ -> pow n (e-1) (n * acc)
 
 let gen_hotp (key:string) (counter:int64) (digits:int): int =
-  Printf.printf "counter:%d\n" (Int64.to_int counter);
   let sha = hmac_sha1 key counter
     |> Sha1.to_bin
   in
   let offset = mac_offset sha in
-  Printf.printf "offset: %d\n" offset;
   let bin_code = mac_bin_code sha offset in
   let max = (pow 10 digits 1) in
 
