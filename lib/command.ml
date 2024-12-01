@@ -93,7 +93,7 @@ let read_lines (ic:in_channel) =
 let lines_to_keys (lines:string list) : key list =
   let rec loop (lines:string list) (acc:key list) =
     match lines with
-    | [] -> acc
+    | [] -> List.rev acc
     | line::lines -> (
       if String.length line = 0 then 
         loop lines acc
