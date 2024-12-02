@@ -2,6 +2,8 @@ open Shared.Types
 
 type key = (string * string)
 
+let fps = 30.0
+
 let verbose_print v msg =
   if v then (
     Printf.printf "%s" msg;
@@ -124,19 +126,57 @@ let show_totps (ctx:context) =
       lines_to_keys lines
   in
 
-  let t = Int64.of_float (Unix.time ()) in
-  let time_to_next = 30 - ((Int64.to_int t) mod 30) in
-  List.iteri (fun i (name,key) -> 
-    Printf.printf "#%d: %s\n" (i+1) name;
-    let totp = Totp.gen_totp key 30 6 t in
-    Printf.printf "  %s\n" totp
-  ) keys;
+  let delta = Float.div 1.0 fps in
+  let last_t = ref 0.0 in
 
-  Printf.printf "Time to new value: %d sec\n" time_to_next
+  while true do
+    if (Float.sub (Unix.time ()) !last_t) >= delta then (
+      Ansi.clear_screen () |> Ansi.move_cursor_home;
+      let t = Int64.of_float (Unix.time ()) in
+      let time_to_next = 30 - ((Int64.to_int t) mod 30) in
+      Ansi.output_line ("Next value in " ^ (Int.to_string time_to_next) ^ " seconds\n" );
+
+      List.iteri (fun i (name,key) -> 
+        Ansi.output "Key #";
+        Ansi.output (Int.to_string (i+1));
+        Ansi.output ": ";
+        Ansi.set_color Bold Default Default;
+        Ansi.output_line name;
+        Ansi.set_graphic_mode Reset;
+
+        let totp = Totp.gen_totp key 30 6 t in
+        Ansi.move_cursor_right 4;
+        Ansi.set_color Bold Default Default;
+        if time_to_next <= 5 then (
+          if (time_to_next mod 2) = 1 then
+            Ansi.set_color Bold Red Default
+        );
+        Ansi.output_line totp;
+        Ansi.set_graphic_mode Reset;
+      ) keys;
+
+      Stdlib.flush Stdlib.stdout;
+      last_t := Unix.time ()
+    )
+  done
 
 let ansi (_ctx:context) =
+  let iters = ref 0 in
+  let time = ref (Unix.time ()) in
+
   Ansi.clear_screen () |> Ansi.move_cursor_home;
   Ansi.output "Hello world";
   Ansi.move_cursor_down_start 1;
-  Ansi.output_line "How are you?";
+  Ansi.output "How are you?";
+  Stdlib.flush Stdlib.stdout;
+  while true do 
+    let cur = Unix.time () in
+    if Float.sub cur !time >= 1.0 then (
+      Ansi.move_cursor_to_col 1;
+      Ansi.output ("Iterations: " ^ (Int.to_string !iters));
+      Stdlib.flush Stdlib.stdout;
+      time := cur;
+      iters := !iters + 1
+    )
+  done;
   ()
