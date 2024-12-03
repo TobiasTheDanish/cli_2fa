@@ -133,3 +133,10 @@ let show_totps (ctx:context) =
   ) keys;
 
   Printf.printf "Time to new value: %d sec\n" time_to_next
+
+let ansi (_ctx:context) =
+  Ansi.clear_screen () |> Ansi.move_cursor_home;
+  Ansi.output "Hello world";
+  Ansi.move_cursor_down_start 1;
+  Ansi.output_line "How are you?";
+  ()
