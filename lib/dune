@@ -1,0 +1,3 @@
+(library
+ (name cli_2fa)
+ (libraries sha))
