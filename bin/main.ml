@@ -18,6 +18,7 @@ let _debug_context (ctx:context) =
   Printf.printf "  cmd: %s\n" (
     match ctx.cmd with
         | Unknown -> "unknown"
+        | Show -> "show"
         | Register k -> (
           match k with 
               | Some k -> "register with '" ^ k ^ "'"
@@ -33,7 +34,15 @@ let _debug_context (ctx:context) =
 let run (ctx:context) =
   match ctx.cmd with
   | Unknown -> failwith "Got a unknown command, this should never happen!"
+  | Show -> Command.show_totps ctx
   | Register k -> Command.register_key k ctx
+
+let is_flag = function
+| "show"     | "-s" 
+| "register" | "-r" 
+| "help"     | "-h"
+| "verbose"  | "-v" -> true
+| _ -> false
 
 let () = 
   let rec parse_args (argv:string list) (acc:context) =
@@ -41,6 +50,16 @@ let () =
     | [] -> acc
     | arg::rest -> 
         match arg with
+        | "show" | "-s" -> (
+          if acc.cmd <> Unknown then (
+            display_usage ~msg:"Too many commands found. You can only perform 1 at a time" ();
+            exit 1
+          ) else 
+            parse_args rest ({
+              cmd = Show;
+              verbose = acc.verbose;
+            })
+        );
         | "register" | "-r" -> (
           if acc.cmd <> Unknown then (
             display_usage ~msg:"Too many commands found. You can only perform 1 at a time" ();
@@ -51,7 +70,12 @@ let () =
               cmd = Register None;
               verbose = acc.verbose;
             })
-            | k::rest -> parse_args rest ({
+            | k::args -> if is_flag k then
+              parse_args rest ({
+                cmd = Register None;
+                verbose = acc.verbose;
+              })
+            else parse_args args ({
               cmd = Register (Some k);
               verbose = acc.verbose;
             })
