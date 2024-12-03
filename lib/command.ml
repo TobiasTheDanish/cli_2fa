@@ -182,16 +182,12 @@ let show_totps (ctx:context) =
 let ansi (_ctx:context) =
   Ansi.clear_screen () |> Ansi.move_cursor_home;
   Ansi.output "Hello world";
-  Ansi.move_cursor_down_start 3;
+  Ansi.move_cursor_down_start 1;
   Stdlib.flush Stdlib.stdout;
 
-  Tui.loop 0.0 (fun state delta -> 
-    Ansi.move_cursor_up 2
+  Tui.loop 0.0 (fun state _ -> 
+    Ansi.move_cursor_to_col 1
     |> Ansi.clear_line;
     Ansi.output ( "Iterations: " ^ (Int.to_string (Float.to_int (Float.floor state)))
     );
-    Ansi.move_cursor_down_start 1
-    |> Ansi.clear_line;
-    Ansi.output ("delta: " ^ (Float.to_string delta));
-    Ansi.move_cursor_down_start 1;
   ) (fun prev delta -> Float.add prev delta)
