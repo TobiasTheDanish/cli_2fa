@@ -63,6 +63,9 @@ let escape_char = "\x1B"
 let clear_screen () = 
   printf "%s[2J" escape_char
 
+let clear_line () = 
+  printf "%s[2K" escape_char
+
 let move_cursor_home () =
   printf "%s[H" escape_char
 

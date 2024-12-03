@@ -2,8 +2,6 @@ open Shared.Types
 
 type key = (string * string)
 
-let fps = 30.0
-
 let verbose_print v msg =
   if v then (
     Printf.printf "%s" msg;
@@ -110,6 +108,11 @@ let lines_to_keys (lines:string list) : key list =
   in
   loop lines []
 
+type show_state = {
+  time_to_next : int;
+  values : (string * string * string) list ;
+}
+
 let show_totps (ctx:context) = 
   let config_dir = get_config_path () in
   let config_file = (config_dir ^ "/config") in
@@ -126,57 +129,69 @@ let show_totps (ctx:context) =
       lines_to_keys lines
   in
 
-  let delta = Float.div 1.0 fps in
-  let last_t = ref 0.0 in
+  let render (state:show_state) (_delta:float) =
+    Ansi.clear_screen () |> Ansi.move_cursor_home;
+    Ansi.output_line ("Next value in " ^ (Int.to_string state.time_to_next) ^ " seconds\n" );
 
-  while true do
-    if (Float.sub (Unix.time ()) !last_t) >= delta then (
-      Ansi.clear_screen () |> Ansi.move_cursor_home;
-      let t = Int64.of_float (Unix.time ()) in
-      let time_to_next = 30 - ((Int64.to_int t) mod 30) in
-      Ansi.output_line ("Next value in " ^ (Int.to_string time_to_next) ^ " seconds\n" );
+    List.iteri (fun i (name,_, totp) -> 
+      Ansi.output "Key #";
+      Ansi.output (Int.to_string (i+1));
+      Ansi.output ": ";
+      Ansi.set_color Bold Default Default;
+      Ansi.output_line name;
+      Ansi.set_graphic_mode Reset;
 
-      List.iteri (fun i (name,key) -> 
-        Ansi.output "Key #";
-        Ansi.output (Int.to_string (i+1));
-        Ansi.output ": ";
-        Ansi.set_color Bold Default Default;
-        Ansi.output_line name;
-        Ansi.set_graphic_mode Reset;
+      Ansi.move_cursor_right 4;
+      Ansi.set_color Bold Default Default;
+      if state.time_to_next <= 5 then (
+        if (state.time_to_next mod 2) = 1 then
+          Ansi.set_color Bold Red Default
+      );
+      Ansi.output_line totp;
+      Ansi.set_graphic_mode Reset;
+    ) state.values
+  in
 
-        let totp = Totp.gen_totp key 30 6 t in
-        Ansi.move_cursor_right 4;
-        Ansi.set_color Bold Default Default;
-        if time_to_next <= 5 then (
-          if (time_to_next mod 2) = 1 then
-            Ansi.set_color Bold Red Default
-        );
-        Ansi.output_line totp;
-        Ansi.set_graphic_mode Reset;
-      ) keys;
+  let update (state:show_state) (_delta:float) =
+    let new_t = Unix.time () in
+    let time_to_next = 30 - ((Int.of_float new_t) mod 30) in
+    {
+      time_to_next = time_to_next;
+      values = if time_to_next = 30 then
+        List.map (fun (n, k, _) -> 
+          let t = Int64.of_float new_t in
+          let totp = Totp.gen_totp k 30 6 t in
+          (n, k, totp)
+        ) state.values
+      else state.values
+    }
+  in
 
-      Stdlib.flush Stdlib.stdout;
-      last_t := Unix.time ()
-    )
-  done
+  let t = Int64.of_float (Unix.time ()) in
+  let time_to_next = 30 - ((Int64.to_int t) mod 30) in
+
+  let values = List.map 
+    (fun (n, k) -> (n, k, (Totp.gen_totp k 30 6 t)))
+    keys in
+
+  Tui.loop {
+    time_to_next = time_to_next;
+    values = values;
+  } render update
 
 let ansi (_ctx:context) =
-  let iters = ref 0 in
-  let time = ref (Unix.time ()) in
-
   Ansi.clear_screen () |> Ansi.move_cursor_home;
   Ansi.output "Hello world";
-  Ansi.move_cursor_down_start 1;
-  Ansi.output "How are you?";
+  Ansi.move_cursor_down_start 3;
   Stdlib.flush Stdlib.stdout;
-  while true do 
-    let cur = Unix.time () in
-    if Float.sub cur !time >= 1.0 then (
-      Ansi.move_cursor_to_col 1;
-      Ansi.output ("Iterations: " ^ (Int.to_string !iters));
-      Stdlib.flush Stdlib.stdout;
-      time := cur;
-      iters := !iters + 1
-    )
-  done;
-  ()
+
+  Tui.loop 0.0 (fun state delta -> 
+    Ansi.move_cursor_up 2
+    |> Ansi.clear_line;
+    Ansi.output ( "Iterations: " ^ (Int.to_string (Float.to_int (Float.floor state)))
+    );
+    Ansi.move_cursor_down_start 1
+    |> Ansi.clear_line;
+    Ansi.output ("delta: " ^ (Float.to_string delta));
+    Ansi.move_cursor_down_start 1;
+  ) (fun prev delta -> Float.add prev delta)

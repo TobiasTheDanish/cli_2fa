@@ -22,6 +22,8 @@ type color =
   | Reset
 
 val clear_screen : unit -> unit
+val clear_line : unit -> unit
+
 val move_cursor_home: unit -> unit
 val move_cursor : int -> int -> unit
 val move_cursor_up : int -> unit
