@@ -52,7 +52,7 @@ let get_config_path () =
 
   home_dir ^ "/.cli_2fa"
 
-let register_key (key_opt:string option) (ctx:context) =
+let _old_register_key (key_opt:string option) (ctx:context) =
   let key = match key_opt with
   | Some k -> k
   | None -> read_key_from_stdin ()
@@ -82,8 +82,106 @@ let register_key (key_opt:string option) (ctx:context) =
         close_out_noerr oc
       )
 
-let riot_register (ctx:context) =
+type registration_state =
+  | InputKey
+  | InputName
+  | StoreInput
 
+type register_state = {
+  name: string;
+  key: string;
+  state: registration_state;
+}
+
+let register_key (_ctx:context) =
+  let update (state: register_state) (event:Tui.riot_event) =
+    match event with
+    | KeyDown (k, m) -> (
+        match m with
+        | Ctrl -> state
+        | No_modifier -> 
+            match k with
+            | Enter -> 
+              {
+                name = state.name;
+                key = state.key;
+                state = match state.state with
+                          | InputKey -> InputName
+                          | InputName -> StoreInput
+                          | StoreInput -> StoreInput
+              }
+            | Space -> (
+                match state.state with
+                | InputKey -> 
+                    {
+                      name = state.name;
+                      key = state.key ^ " ";
+                      state = state.state;
+                    }
+                | InputName -> 
+                    {
+                      name = state.name ^ " ";
+                      key = state.key;
+                      state = state.state;
+                    }
+                | StoreInput -> state
+            )
+            | Key k -> (
+                match state.state with
+                | InputKey -> 
+                    {
+                      name = state.name;
+                      key = state.key ^ k;
+                      state = state.state;
+                    }
+                | InputName -> 
+                    {
+                      name = state.name ^ k;
+                      key = state.key;
+                      state = state.state;
+                    }
+                | StoreInput -> state
+            )
+            | _ -> state
+    )
+    | _ -> state
+  in
+
+  let render (state:register_state) =
+    Ansi.move_cursor_home () |> Ansi.clear_screen;
+    let title = match state.state with
+    | InputKey -> "Please provide the key you wish to register:"
+    | InputName -> "What name would you like to reference this key by?"
+    | StoreInput -> "Saving key..."
+    in
+
+    let chars = match state.state with
+    | InputKey -> Bytes.of_string state.key
+    | InputName -> Bytes.of_string state.name
+    | StoreInput -> Bytes.empty
+    in
+
+    Ansi.move_cursor_down_start 1;
+    Ansi.set_color Bold Default Default;
+    Ansi.output_line title;
+
+    match state.state with
+    | StoreInput -> ()
+    | _ -> (
+      Ansi.move_cursor_down_start 1;
+
+      Ansi.set_color Italic Cyan Default;
+      Bytes.iteri (fun _ b -> 
+        Ansi.output (Char.escaped b)
+      ) chars
+    )
+  in
+
+  Tui.loop_riot {
+    name = "";
+    key = "";
+    state = InputKey;
+  } render update
 
 let read_lines (ic:in_channel) = 
   let try_read () =

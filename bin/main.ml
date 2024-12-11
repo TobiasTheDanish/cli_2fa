@@ -7,7 +7,7 @@ let _display_usage ?(msg="") ?(name="cli_2fa") () = (
   
   Printf.printf "Usage: %s [command] [options]\n\n" name;
   Printf.printf "Commands:\n";
-  Printf.printf "  register -r [key] : Register a new key for TOTP\n";
+  Printf.printf "  register -r : Register a new key for TOTP\n";
   Printf.printf "  help -h           : Prints this message\n\n";
   Printf.printf "Options:\n";
   Printf.printf "  verbose -v        : Output all info\n"
@@ -20,11 +20,7 @@ let _debug_context (ctx:context) =
         | Unknown -> "unknown"
         | Show -> "show"
         | Ansi -> "ansi"
-        | Register k -> (
-          match k with 
-              | Some k -> "register with '" ^ k ^ "'"
-              | None -> "register with no key"
-        )
+        | Register -> "register"
   );
   Printf.printf "  verbose: %s\n" (
     match ctx.verbose with
@@ -37,7 +33,7 @@ let run (ctx:context) =
   | Unknown -> failwith "Got a unknown command, this should never happen!"
   | Show -> Command.show_totps ctx
   | Ansi -> Command.ansi ctx
-  | Register k -> Command.register_key k ctx
+  | Register -> Command.register_key ctx
 
 let _is_flag = function
 | "show"     | "-s" 
@@ -66,15 +62,15 @@ let speclist = [
     then failwith "Too many commands" 
     else command := Show
   ), "Show values for registered keys");
-  ("-r", Arg.String (fun key -> 
+  ("-r", Arg.Unit (fun () -> 
     if !command <> Unknown 
     then failwith "Too many commands" 
-    else command := Register (Some key)
+    else command := Register
   ), "Register new key");
-  ("--register", Arg.String (fun key -> 
+  ("--register", Arg.Unit (fun () -> 
     if !command <> Unknown 
     then failwith "Too many commands" 
-    else command := Register (Some key)
+    else command := Register
   ), "Register new key");
 ]
 

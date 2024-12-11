@@ -1,5 +1,5 @@
 type command =
-  | Register of string option
+  | Register
   | Show
   | Ansi
   | Unknown
