@@ -1,3 +1,3 @@
 (library
  (name cli_2fa)
- (libraries sha unix base32 shared))
+ (libraries sha unix base32 shared riot tty))

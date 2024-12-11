@@ -82,6 +82,9 @@ let register_key (key_opt:string option) (ctx:context) =
         close_out_noerr oc
       )
 
+let riot_register (ctx:context) =
+
+
 let read_lines (ic:in_channel) = 
   let try_read () =
     try Some (input_line ic) with End_of_file -> None in
@@ -111,12 +114,12 @@ let lines_to_keys (lines:string list) : key list =
 type show_state = {
   time_to_next : int;
   values : (string * string * string) list ;
+  cursor_row: int;
 }
 
-let show_totps (ctx:context) = 
+let show_totps (_ctx:context) = 
   let config_dir = get_config_path () in
   let config_file = (config_dir ^ "/config") in
-  verbose_print ctx.verbose "Opening config file\n";
 
   let ic = open_read_file config_file in
   let keys = match ic with
@@ -129,7 +132,7 @@ let show_totps (ctx:context) =
       lines_to_keys lines
   in
 
-  let render (state:show_state) (_delta:float) =
+  let render (state:show_state) =
     Ansi.clear_screen () |> Ansi.move_cursor_home;
     Ansi.output_line ("Next value in " ^ (Int.to_string state.time_to_next) ^ " seconds\n" );
 
@@ -147,24 +150,51 @@ let show_totps (ctx:context) =
         if (state.time_to_next mod 2) = 1 then
           Ansi.set_color Bold Red Default
       );
+      if state.cursor_row = i then (
+        Ansi.set_color Bold Cyan Default;
+        Ansi.move_cursor_left 2;
+        Ansi.output "X "
+      );
       Ansi.output_line totp;
       Ansi.set_graphic_mode Reset;
     ) state.values
   in
 
-  let update (state:show_state) (_delta:float) =
-    let new_t = Unix.time () in
-    let time_to_next = 30 - ((Int.of_float new_t) mod 30) in
-    {
-      time_to_next = time_to_next;
-      values = if time_to_next = 30 then
-        List.map (fun (n, k, _) -> 
-          let t = Int64.of_float new_t in
-          let totp = Totp.gen_totp k 30 6 t in
-          (n, k, totp)
-        ) state.values
-      else state.values
-    }
+  let update (state:show_state) (event:Tui.riot_event) =
+    match event with
+    | Frame new_t -> (
+      let time_to_next = 30 - ((Int.of_float new_t) mod 30) in
+      {
+        time_to_next = time_to_next;
+        values = if time_to_next = 30 then
+          List.map (fun (n, k, _) -> 
+            let t = Int64.of_float new_t in
+            let totp = Totp.gen_totp k 30 6 t in
+            (n, k, totp)
+          ) state.values
+        else state.values;
+        cursor_row = state.cursor_row;
+      }
+    )
+    | KeyDown (k, _) -> (
+      let new_cursor = match k with
+        | Up -> state.cursor_row - 1
+        | Key k when k = "k" -> state.cursor_row - 1
+        | Down -> state.cursor_row + 1
+        | Key k when k = "j" -> state.cursor_row + 1
+        | _ -> state.cursor_row
+      in
+      {
+        time_to_next = state.time_to_next;
+        values = state.values;
+        cursor_row = 
+          if new_cursor < 0 then (List.length state.values)-1 
+          else if new_cursor >= (List.length state.values) then 0
+          else new_cursor
+        ;
+      }
+    ) 
+    | Unknown _ -> state
   in
 
   let t = Int64.of_float (Unix.time ()) in
@@ -174,20 +204,22 @@ let show_totps (ctx:context) =
     (fun (n, k) -> (n, k, (Totp.gen_totp k 30 6 t)))
     keys in
 
-  Tui.loop {
+  Tui.loop_riot {
     time_to_next = time_to_next;
     values = values;
+    cursor_row = 0;
   } render update
 
 let ansi (_ctx:context) =
-  Ansi.clear_screen () |> Ansi.move_cursor_home;
-  Ansi.output "Hello world";
-  Ansi.move_cursor_down_start 1;
-  Stdlib.flush Stdlib.stdout;
-
-  Tui.loop 0.0 (fun state _ -> 
-    Ansi.move_cursor_to_col 1
-    |> Ansi.clear_line;
-    Ansi.output ( "Iterations: " ^ (Int.to_string (Float.to_int (Float.floor state)))
-    );
-  ) (fun prev delta -> Float.add prev delta)
+  Tui.loop_riot (0.0, "none", "none") (fun (t, k, e) -> 
+    Ansi.clear_screen () |> Ansi.move_cursor_home;
+    Ansi.output ("running time: " ^ (Float.to_string t));
+    Ansi.move_cursor_down_start 1;
+    Ansi.output ("Last event: " ^ e);
+    Ansi.move_cursor_down_start 1;
+    Ansi.output ("Last key: " ^ k)
+  ) (fun (prevT, prevK, _) event -> match event with
+      | KeyDown (k, m) -> (prevT, ((Tui.modifier_to_string m) ^(Tui.key_to_string k)), "KeyDown")
+      | Frame t -> (t, prevK, "Frame")
+      | Unknown _ -> Printf.eprintf "Unknown message!"; (prevT, prevK, "");
+  )

@@ -1,4 +1,4 @@
 (executable
  (public_name cli_2fa)
  (name main)
- (libraries cli_2fa shared))
+ (libraries cli_2fa shared riot))
