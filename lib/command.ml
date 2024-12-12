@@ -91,7 +91,29 @@ type register_state = {
   name: string;
   key: string;
   state: registration_state;
+  cursor: int;
 }
+
+let insert_at (cur:string) (i:int) (s:string) = 
+  let cur_len = String.length cur in
+
+  match i with
+  | _ when i <= 0 -> s^cur
+  | _ when i >= cur_len -> cur ^ s
+  | _ -> 
+      let start = String.sub cur 0 (i) in
+      let rest = String.sub cur (i) (cur_len - i) in
+      start ^ s ^ rest
+
+let remove_at (cur:string) (i:int) = 
+  let cur_len = String.length cur in
+  match i with
+  | _ when i <= 0 || i > cur_len -> cur
+  | _ when i = cur_len -> String.sub cur 0 (i-1) 
+  | _ -> 
+    let start = String.sub cur 0 (i-1) in
+    let rest = String.sub cur (i) (cur_len - i) in
+    start ^ rest
 
 let register_key (_ctx:context) =
   let update (state: register_state) (event:Tui.riot_event) =
@@ -101,28 +123,50 @@ let register_key (_ctx:context) =
         | Ctrl -> state
         | No_modifier -> 
             match k with
+            | Backspace -> (
+                match state.state with
+                | InputKey -> 
+                    {
+                      name = state.name;
+                      key = remove_at state.key (state.cursor-1);
+                      state = state.state;
+                      cursor = max 1 (state.cursor-1);
+                    }
+                | InputName -> 
+                    {
+                      name = remove_at state.name (state.cursor-1);
+                      key = state.key;
+                      state = state.state;
+                      cursor = max 1 (state.cursor-1);
+                    }
+                | StoreInput -> state
+            )
             | Enter -> 
               {
                 name = state.name;
                 key = state.key;
-                state = match state.state with
+                state = (match state.state with
                           | InputKey -> InputName
                           | InputName -> StoreInput
                           | StoreInput -> StoreInput
+                          );
+                cursor = 1;
               }
             | Space -> (
                 match state.state with
                 | InputKey -> 
                     {
                       name = state.name;
-                      key = state.key ^ " ";
+                      key = insert_at state.key (state.cursor-1) " ";
                       state = state.state;
+                      cursor = state.cursor+1;
                     }
                 | InputName -> 
                     {
-                      name = state.name ^ " ";
+                      name = insert_at state.name (state.cursor-1) " ";
                       key = state.key;
                       state = state.state;
+                      cursor = state.cursor+1;
                     }
                 | StoreInput -> state
             )
@@ -131,16 +175,39 @@ let register_key (_ctx:context) =
                 | InputKey -> 
                     {
                       name = state.name;
-                      key = state.key ^ k;
+                      key = insert_at state.key (state.cursor-1) k;
                       state = state.state;
+                      cursor = state.cursor+1;
                     }
                 | InputName -> 
                     {
-                      name = state.name ^ k;
+                      name = insert_at state.name (state.cursor-1) k;
                       key = state.key;
                       state = state.state;
+                      cursor = state.cursor+1;
                     }
                 | StoreInput -> state
+            )
+            | Left -> (
+              {
+                name = state.name;
+                key = state.key;
+                state = state.state;
+                cursor = max 1 (state.cursor-1);
+              }
+            )
+            | Right -> (
+              {
+                name = state.name;
+                key = state.key;
+                state = state.state;
+                cursor = min (state.cursor+1) (
+                  match state.state with
+                  | InputKey -> String.length state.key + 1;
+                  | InputName -> String.length state.name + 1;
+                  | StoreInput -> 1;
+                );
+              }
             )
             | _ -> state
     )
@@ -169,11 +236,13 @@ let register_key (_ctx:context) =
     | StoreInput -> ()
     | _ -> (
       Ansi.move_cursor_down_start 1;
-
       Ansi.set_color Italic Cyan Default;
       Bytes.iteri (fun _ b -> 
         Ansi.output (Char.escaped b)
-      ) chars
+      ) chars;
+      Ansi.move_cursor_down_start 1;
+      Ansi.move_cursor_to_col state.cursor;
+      Ansi.output "^"
     )
   in
 
@@ -181,6 +250,7 @@ let register_key (_ctx:context) =
     name = "";
     key = "";
     state = InputKey;
+    cursor = 1;
   } render update
 
 let read_lines (ic:in_channel) = 
