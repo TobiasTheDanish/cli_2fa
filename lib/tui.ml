@@ -48,7 +48,6 @@ let loop (initial:'a) (render:('a -> float -> unit)) (update: ('a -> float -> ev
 
 (* RIOT IMPLEMENTATION INCOMING!!*)
 
-open Riot
 open Tty
 
 type custom_time = float
@@ -84,9 +83,9 @@ let key_to_string = function
 type riot_event = 
   | KeyDown of key * modifier
   | Frame of custom_time
-  | Unknown of Message.t
+  | Unknown of Riot.Message.t
 
-type Message.t += 
+type Riot.Message.t += 
   | Input of riot_event
 
 let io_run updater = 
@@ -103,7 +102,7 @@ let io_run updater =
   in
 
   let rec loop updater =
-    yield ();
+    Riot.yield ();
     match Stdin.read_utf8 () with
     | `Read key ->
         let msg =
@@ -123,39 +122,39 @@ let io_run updater =
               KeyDown (translate key, Ctrl)
           | key -> KeyDown (translate key, No_modifier)
         in
-        send updater (Input msg);
+        Riot.send updater (Input msg);
         loop updater
     | _ -> loop updater
   in
 
-  link updater;
+  Riot.link updater;
   let termios = Stdin.setup () in
-  let _ = spawn_link (fun () -> loop updater) in
-  let _ = receive_any () in
+  let _ = Riot.spawn_link (fun () -> loop updater) in
+  let _ = Riot.receive_any () in
   Stdin.shutdown termios
 
 type 'model app = {
-  _timer: Timer.timer;
+  _timer: Riot.Timer.timer;
   mutable state: 'model;
   render:('model -> unit);
   update:('model -> riot_event -> 'model);
   start_time: custom_time;
 }
 
-type Message.t += 
+type Riot.Message.t += 
   | Tick
 
 let updater_run (app: 'model app) =
   let rec loop (app: 'model app) =
     let e =
-      match receive_any () with
+      match Riot.receive_any () with
       | Input e -> e
       | Tick -> Frame ((Unix.gettimeofday ()) -. app.start_time)
       | msg -> Unknown msg
     in
 
     match e with
-    | Unknown _ -> Printf.eprintf "Unknown message\n"; exit (self ()) Process.Normal
+    | Unknown _ -> Printf.eprintf "Unknown message\n"; Riot.exit (Riot.self ()) Riot.Process.Normal
     | e -> 
         app.state <- app.update app.state e;
         app.render app.state;
@@ -174,10 +173,12 @@ let fps_to_interval (fps:int) =
     |> Int64.of_float
 
 let loop_riot (initial:'model) (render:('model -> unit)) (update: ('model -> riot_event -> 'model)) =
+  Sys.set_signal Sys.sigint (Signal_handle (fun _ -> Ansi.show_cursor(); exit 0));
+
   Riot.run @@ fun () -> 
-    let updater = spawn (fun () -> 
+    let updater = Riot.spawn (fun () -> 
       let timer = 
-        Riot.Timer.send_interval ~every:(fps_to_interval fps) (self ()) Tick 
+        Riot.Timer.send_interval ~every:(fps_to_interval fps) (Riot.self ()) Tick 
         |> Result.get_ok
       in
       let app = {
@@ -191,9 +192,9 @@ let loop_riot (initial:'model) (render:('model -> unit)) (update: ('model -> rio
       updater_run app
     ) in
 
-    let io = spawn (fun () -> io_run updater) in
+    let io = Riot.spawn (fun () -> io_run updater) in
 
-    wait_pids [updater;];
+    Riot.wait_pids [updater;];
 
-    Riot.exit io Process.Normal
+    Riot.exit io Riot.Process.Normal
     |> Riot.shutdown

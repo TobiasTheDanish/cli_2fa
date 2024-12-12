@@ -246,12 +246,14 @@ let register_key (_ctx:context) =
     )
   in
 
+  Ansi.hide_cursor ();
   Tui.loop_riot {
     name = "";
     key = "";
     state = InputKey;
     cursor = 1;
-  } render update
+  } render update;
+  Ansi.show_cursor ()
 
 let read_lines (ic:in_channel) = 
   let try_read () =

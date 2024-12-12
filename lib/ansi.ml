@@ -93,6 +93,12 @@ let move_cursor_down_start (rows:int) =
 let move_cursor_to_col (col:int) =
   printf "%s[%dG" escape_char col
 
+let hide_cursor () =
+  printf "%s[?25l" escape_char
+
+let show_cursor () =
+  printf "%s[?25h" escape_char
+
 let output (text:string) =
   printf "%s" text
 

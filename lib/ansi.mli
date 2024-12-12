@@ -34,6 +34,9 @@ val move_cursor_up_start : int -> unit
 val move_cursor_down_start : int -> unit
 val move_cursor_to_col : int -> unit
 
+val hide_cursor : unit -> unit
+val show_cursor : unit -> unit
+
 val output : string -> unit
 val output_line : string -> unit
 
