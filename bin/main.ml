@@ -20,6 +20,7 @@ let _debug_context (ctx:context) =
         | Unknown -> "unknown"
         | Show -> "show"
         | Ansi -> "ansi"
+        | Proc -> "proc"
         | Register -> "register"
   );
   Printf.printf "  verbose: %s\n" (
@@ -33,6 +34,7 @@ let run (ctx:context) =
   | Unknown -> failwith "Got a unknown command, this should never happen!"
   | Show -> Command.show_totps ctx
   | Ansi -> Command.ansi ctx
+  | Proc -> Command.proc ctx
   | Register -> Command.register_key ctx
 
 let _is_flag = function
@@ -72,6 +74,11 @@ let speclist = [
     then failwith "Too many commands" 
     else command := Register
   ), "Register new key");
+  ("-p", Arg.Unit (fun () -> 
+    if !command <> Unknown 
+    then failwith "Too many commands" 
+    else command := Proc
+  ), "Test process spawning");
 ]
 
 let anon_fun arg = 

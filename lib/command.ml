@@ -11,15 +11,14 @@ let verbose_print v msg =
 let get_env (name:string) = 
   Sys.getenv_opt name
 
-let open_dir (path:string) (v:bool) =
+let open_dir (path:string) (_v:bool) =
   try 
     if not (Sys.file_exists path && Sys.is_directory path) then (
-      verbose_print v ("No directory at '" ^ path ^ "'. Creating dir\n");
-      Unix.mkdir path 0o755
-    )
+      Unix.mkdir path 0o755;
+    );
+    true
   with
-  | Sys_error err -> Printf.eprintf "Error when creating directory at '%s': %s\n" path err
-  | Unix.Unix_error _ -> Printf.eprintf "Error when creating directory at '%s'\n" path
+  | _ -> false
 
 let open_read_file (path:string) =
   try 
@@ -62,25 +61,27 @@ let _old_register_key (key_opt:string option) (ctx:context) =
   let name = read_line () in
 
   let config_dir = get_config_path () in
-  open_dir config_dir ctx.verbose;
-
-  let config_file = (config_dir ^ "/config") in
-  verbose_print ctx.verbose "Opening config file\n";
-  let oc = open_append_file config_file in
-  match oc with
-  | None -> ()
-  | Some oc -> 
+  if not (open_dir config_dir ctx.verbose) then 
+    () 
+  else (
+    let config_file = (config_dir ^ "/config") in
+    verbose_print ctx.verbose "Opening config file\n";
+    let oc = open_append_file config_file in
+    match oc with
+    | None -> ()
+    | Some oc -> 
       try
-      Printf.fprintf oc "%s : %s\n" name key;
-      Stdlib.flush oc;
+        Printf.fprintf oc "%s : %s\n" name key;
+        Stdlib.flush oc;
 
-      Printf.printf "Key registered successfully\n";
-      close_out oc
+        Printf.printf "Key registered successfully\n";
+        close_out oc
       with
       | Sys_error e -> (
-        Printf.eprintf "Error writing to file '%s': '%s'\n" config_file e;
-        close_out_noerr oc
+          Printf.eprintf "Error writing to file '%s': '%s'\n" config_file e;
+          close_out_noerr oc
       )
+  )
 
 type registration_state =
   | InputKey
@@ -92,6 +93,7 @@ type register_state = {
   key: string;
   state: registration_state;
   cursor: int;
+  key_saved: bool;
 }
 
 let insert_at (cur:string) (i:int) (s:string) = 
@@ -118,6 +120,13 @@ let remove_at (cur:string) (i:int) =
 let register_key (_ctx:context) =
   let update (state: register_state) (event:Tui.riot_event) =
     match event with
+    | Process_end b -> {
+      name = state.name;
+      key = state.key;
+      state = state.state;
+      cursor = state.cursor;
+      key_saved = b;
+    }
     | KeyDown (k, m) -> (
         match m with
         | Ctrl -> state
@@ -131,6 +140,7 @@ let register_key (_ctx:context) =
                       key = remove_at state.key (state.cursor-1);
                       state = state.state;
                       cursor = max 1 (state.cursor-1);
+                      key_saved = state.key_saved;
                     }
                 | InputName -> 
                     {
@@ -138,10 +148,40 @@ let register_key (_ctx:context) =
                       key = state.key;
                       state = state.state;
                       cursor = max 1 (state.cursor-1);
+                      key_saved = state.key_saved;
                     }
                 | StoreInput -> state
             )
             | Enter -> 
+                if state.state = StoreInput then (
+                  Tui.spawn_process (fun () -> 
+                    let config_dir = get_config_path () in
+                    if not (open_dir config_dir false) then 
+                      false
+                    else (
+                      let config_file = (config_dir ^ "/config") in
+                      let oc = open_append_file config_file in
+                      match oc with
+                      | None -> false
+                      | Some oc -> 
+                        try
+                          Printf.fprintf oc "%s : %s\n" state.name state.key;
+                          Stdlib.flush oc;
+
+                          Printf.printf "Key registered successfully\n";
+                          close_out oc;
+                          true
+                        with
+                        | Sys_error e -> (
+                            Printf.eprintf "Error writing to file '%s': '%s'\n" config_file e;
+                            close_out_noerr oc;
+                            false
+                        )
+                    )
+                  )
+                ) else if state.state = InputName then (
+                  Ansi.show_cursor ()
+                );
               {
                 name = state.name;
                 key = state.key;
@@ -151,6 +191,7 @@ let register_key (_ctx:context) =
                           | StoreInput -> StoreInput
                           );
                 cursor = 1;
+                key_saved = state.key_saved;
               }
             | Space -> (
                 match state.state with
@@ -160,13 +201,15 @@ let register_key (_ctx:context) =
                       key = insert_at state.key (state.cursor-1) " ";
                       state = state.state;
                       cursor = state.cursor+1;
-                    }
-                | InputName -> 
+                      key_saved = state.key_saved;
+                      }
+                  | InputName -> 
                     {
                       name = insert_at state.name (state.cursor-1) " ";
                       key = state.key;
                       state = state.state;
                       cursor = state.cursor+1;
+                      key_saved = state.key_saved;
                     }
                 | StoreInput -> state
             )
@@ -178,6 +221,7 @@ let register_key (_ctx:context) =
                       key = insert_at state.key (state.cursor-1) k;
                       state = state.state;
                       cursor = state.cursor+1;
+                      key_saved = state.key_saved;
                     }
                 | InputName -> 
                     {
@@ -185,6 +229,7 @@ let register_key (_ctx:context) =
                       key = state.key;
                       state = state.state;
                       cursor = state.cursor+1;
+                      key_saved = state.key_saved;
                     }
                 | StoreInput -> state
             )
@@ -194,6 +239,7 @@ let register_key (_ctx:context) =
                 key = state.key;
                 state = state.state;
                 cursor = max 1 (state.cursor-1);
+                key_saved = state.key_saved;
               }
             )
             | Right -> (
@@ -207,6 +253,7 @@ let register_key (_ctx:context) =
                   | InputName -> String.length state.name + 1;
                   | StoreInput -> 1;
                 );
+                key_saved = state.key_saved;
               }
             )
             | _ -> state
@@ -219,7 +266,8 @@ let register_key (_ctx:context) =
     let title = match state.state with
     | InputKey -> "Please provide the key you wish to register:"
     | InputName -> "What name would you like to reference this key by?"
-    | StoreInput -> "Saving key..."
+    | StoreInput when not state.key_saved -> "Saving key..."
+    | StoreInput -> "Key saved"
     in
 
     let chars = match state.state with
@@ -233,7 +281,12 @@ let register_key (_ctx:context) =
     Ansi.output_line title;
 
     match state.state with
-    | StoreInput -> ()
+    | StoreInput -> (
+      if state.key_saved then (
+        Ansi.move_cursor_down_start 1;
+        Ansi.output "Key have been saved to disk"
+      )
+    )
     | _ -> (
       Ansi.move_cursor_down_start 1;
       Ansi.set_color Italic Cyan Default;
@@ -252,6 +305,7 @@ let register_key (_ctx:context) =
     key = "";
     state = InputKey;
     cursor = 1;
+    key_saved = false;
   } render update;
   Ansi.show_cursor ()
 
@@ -332,6 +386,7 @@ let show_totps (_ctx:context) =
 
   let update (state:show_state) (event:Tui.riot_event) =
     match event with
+    | Process_end _ -> state
     | Frame new_t -> (
       let time_to_next = 30 - ((Int.of_float new_t) mod 30) in
       {
@@ -389,7 +444,30 @@ let ansi (_ctx:context) =
     Ansi.move_cursor_down_start 1;
     Ansi.output ("Last key: " ^ k)
   ) (fun (prevT, prevK, _) event -> match event with
+      | Process_end _ -> (prevT, prevK, "Process_end")
       | KeyDown (k, m) -> (prevT, ((Tui.modifier_to_string m) ^(Tui.key_to_string k)), "KeyDown")
       | Frame t -> (t, prevK, "Frame")
       | Unknown _ -> Printf.eprintf "Unknown message!"; (prevT, prevK, "");
   )
+
+let proc (_ctx:context) = 
+  let update (state:float) (event:Tui.riot_event) =
+    match event with
+    | KeyDown (Enter, _) -> Tui.spawn_process (fun () -> 
+        Printf.printf "Hello from spawned process\n";
+        Stdlib.flush Stdlib.stdout;
+        Riot.sleep 2.;
+        Printf.printf "Hello from spawned process\n";
+        true
+      ); state
+    | Frame t -> t
+    | _ -> state
+  in
+
+  let render (time: float) =
+    Ansi.move_cursor_home ()
+    |> Ansi.clear_line;
+    Ansi.output_line ("Time:"^(Float.to_string time))
+  in
+
+  Tui.loop_riot 0.0 render update

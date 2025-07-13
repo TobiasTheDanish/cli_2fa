@@ -2,6 +2,7 @@ type command =
   | Register 
   | Show
   | Ansi
+  | Proc
   | Unknown
 
 type context = {

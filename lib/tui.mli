@@ -27,6 +27,9 @@ val key_to_string : key -> string
 type riot_event = 
   | KeyDown of key * modifier
   | Frame of custom_time
+  | Process_end of bool
   | Unknown of Message.t
 
 val loop_riot : 'a -> ('a -> unit) -> ('a -> riot_event -> 'a) -> unit
+
+val spawn_process : (unit -> bool) -> unit

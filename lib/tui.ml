@@ -83,6 +83,7 @@ let key_to_string = function
 type riot_event = 
   | KeyDown of key * modifier
   | Frame of custom_time
+  | Process_end of bool
   | Unknown of Riot.Message.t
 
 type Riot.Message.t += 
@@ -143,6 +144,7 @@ type 'model app = {
 
 type Riot.Message.t += 
   | Tick
+  | Process_end of bool
 
 let updater_run (app: 'model app) =
   let rec loop (app: 'model app) =
@@ -150,6 +152,7 @@ let updater_run (app: 'model app) =
       match Riot.receive_any () with
       | Input e -> e
       | Tick -> Frame ((Unix.gettimeofday ()) -. app.start_time)
+      | Process_end b -> Process_end b
       | msg -> Unknown msg
     in
 
@@ -173,10 +176,9 @@ let fps_to_interval (fps:int) =
     |> Int64.of_float
 
 let loop_riot (initial:'model) (render:('model -> unit)) (update: ('model -> riot_event -> 'model)) =
-  Sys.set_signal Sys.sigint (Signal_handle (fun _ -> Ansi.show_cursor(); exit 0));
-
   Riot.run @@ fun () -> 
     let updater = Riot.spawn (fun () -> 
+      Riot.register "updater" (Riot.self ());
       let timer = 
         Riot.Timer.send_interval ~every:(fps_to_interval fps) (Riot.self ()) Tick 
         |> Result.get_ok
@@ -198,3 +200,21 @@ let loop_riot (initial:'model) (render:('model -> unit)) (update: ('model -> rio
 
     Riot.exit io Riot.Process.Normal
     |> Riot.shutdown
+
+let spawn_process (_proc: (unit->bool)) =
+  let _worker = Riot.spawn_link (fun () -> 
+    let oc = open_out "/home/tobias/.cli_2fa/debug" in
+
+    Printf.fprintf oc "Start of spawned process\n";
+    Stdlib.flush oc;
+
+    let res = _proc () in
+
+    Printf.fprintf oc "Process returned %b\n" res;
+    Stdlib.flush oc;
+
+    Riot.send_by_name ~name:"updater" (Process_end res)
+  ) in
+
+  ()
+  
