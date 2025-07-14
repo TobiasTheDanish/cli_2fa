@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-func GenerateTotp(key string, t uint64, step, digits int) (string, error) {
+func generateTotp(key string, t uint64, step, digits int) (string, error) {
 	counter := t / uint64(step)
 
 	decoded, err := base32.StdEncoding.DecodeString(key)
@@ -16,7 +16,7 @@ func GenerateTotp(key string, t uint64, step, digits int) (string, error) {
 	hexKey := hex.EncodeToString(decoded)
 	fmt.Printf("decoded key: %s\n", hexKey)
 
-	hotp := GenerateHOTP(hexKey, counter, digits)
+	hotp := generateHOTP(hexKey, counter, digits)
 
 	return fmt.Sprintf("%0*d", digits, hotp), nil
 }

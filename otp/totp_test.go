@@ -1,10 +1,8 @@
-package otp_test
+package otp
 
 import (
 	"encoding/base32"
 	"testing"
-
-	"github.com/tobiasthedanish/cli_2fa/otp"
 )
 
 var rfcTestKey = "12345678901234567890"
@@ -76,7 +74,7 @@ func TestGenerateTotp(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := otp.GenerateTotp(tt.key, tt.t, tt.step, tt.digits)
+			got, gotErr := generateTotp(tt.key, tt.t, tt.step, tt.digits)
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("GenerateTotp() failed: %v", gotErr)

@@ -9,7 +9,7 @@ import (
 	"math"
 )
 
-func GenerateHOTP(key string, counter uint64, digits int) int {
+func generateHOTP(key string, counter uint64, digits int) int {
 	k := make([]byte, len([]byte(key)))
 	hex.Decode(k, []byte(key))
 	h := hmac.New(sha1.New, []byte(k))

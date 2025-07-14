@@ -1,9 +1,7 @@
-package otp_test
+package otp
 
 import (
 	"testing"
-
-	"github.com/tobiasthedanish/cli_2fa/otp"
 )
 
 func TestGenerateHOTP(t *testing.T) {
@@ -89,7 +87,7 @@ func TestGenerateHOTP(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := otp.GenerateHOTP(tt.key, tt.counter, tt.digits)
+			got := generateHOTP(tt.key, tt.counter, tt.digits)
 			if got != tt.want {
 				t.Errorf("GenerateHOTP() = %v, want %v", got, tt.want)
 			}
