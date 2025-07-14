@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-var rfcTestKey = "12345678901234567890"
-
 func TestGenerateTotp(t *testing.T) {
 	tests := []struct {
 		name   string

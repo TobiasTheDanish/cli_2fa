@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+var rfcTestKey = "12345678901234567890"
+
 func Test_otp_FromTime(t *testing.T) {
 	o := New(rfcTestKey)
 	tests := []struct {
