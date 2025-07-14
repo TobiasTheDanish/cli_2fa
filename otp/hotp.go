@@ -5,7 +5,6 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"math"
 )
 
@@ -19,8 +18,6 @@ func generateHOTP(key string, counter uint64, digits int) int {
 	h.Write(msg)
 
 	hash := h.Sum(nil)
-
-	fmt.Printf("hash: %s\n", hex.EncodeToString(hash))
 
 	offset := hash[len(hash)-1] & 0xf
 

@@ -14,7 +14,6 @@ func generateTotp(key string, t uint64, step, digits int) (string, error) {
 		return "", err
 	}
 	hexKey := hex.EncodeToString(decoded)
-	fmt.Printf("decoded key: %s\n", hexKey)
 
 	hotp := generateHOTP(hexKey, counter, digits)
 
